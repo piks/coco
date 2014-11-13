@@ -126,6 +126,7 @@ class Message(object):
 		self._raw = ""
 		self._group = None
 		self._post = ""
+		self._ip = None
 		
 		for attr, val in kw.items():
 			if val == None:
@@ -147,10 +148,12 @@ class Message(object):
 	def getPost(self): return self._post
 	def getUser(self): return self._name
 	def getGroup(self): return self._group
+	def getIP(self): return self._ip
 	
 	name = property(getUser)
 	post = property(getPost)
 	group = property(getGroup)
+	ip = property(getIP)
 	
 
 class Struct:
