@@ -205,6 +205,20 @@ class Group(object):
 			try: return [n for n in self.history if n.pid == args][-1]
 			except: return False
 
+	def isMod(self, args):
+		mods = self.mods + [self.owner]
+		if args in mods:
+			return True
+		return False
+
+	def delUser(self, args):
+		if args:
+			unid = self.Last(args)._unid
+			ip = self.Last(args)._ip
+			self.s("delallmsg", unid, ip, args)
+			return True
+		return False
+
 	def connect(self):
 		try:
 			self.sock = socket.socket() # Make a new socket instance.
@@ -480,7 +494,7 @@ class Manager(object):
 	def _r_ok(self, group, args):
 		self._callEvent("ok", group.name)
 		group.owner = args[1]
-		group.mods = args[7].split(";")
+		group.mods = [f.split(",")[0] for f in args[7].split(";")]
 		self.ip = args[6]
 	
 	def _r_denied(self, group, args):
@@ -508,14 +522,16 @@ class Manager(object):
 		pid = args[5]
 		msgid = args[5]
 		rawmsg = ":".join(args[9:])
+		ip = args[6]
 		post, nColor, fSize, fColor, fFace = self.cleanPost(rawmsg)
 		msg = self.createMessage(
 			msgid = msgid,
 			pid = pid,
-			name = name,
+			name = name.lower(),
 			puid = puid,
 			group = group.name,
-			post = post
+			post = post,
+			ip = ip
 			)
 		self._i_log.append(msg)
 	
@@ -547,11 +563,12 @@ class Manager(object):
 		post, nColor, fSize, fColor, fFace = self.cleanPost(rawmsg)
 		msg = self.createMessage(
 			msgid = i,
-			name = name,
+			name = name.lower(),
 			puid = puid,
 			unid = unid,
 			group = group.name,
-			post = post
+			post = post,
+			ip = ip
 		)
 
 		self._mq[i] = msg
