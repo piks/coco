@@ -9,7 +9,8 @@ class Bot(coco.internals.Manager):
 		self.setFontColor("#3bf")
 		self.run()
 
-	def _on_Message(self, group, user, post):
+	def _on_Message(self, group, user, msg):
+		post = msg.post
 		ret = "%s: %s: %s" % (group.name, user, post)
 		print(ret)
 
