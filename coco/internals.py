@@ -483,7 +483,7 @@ class Manager(object):
 		print("PR","%s %s" % (args[1], args[0].name))
 		
 	def _p_ok(self, args):
-		print("CONN", "%s" % args)
+		print("CONN", "%s" % args.name)
 
 	def setPremium(self, group):
 		group.setbg()
