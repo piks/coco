@@ -402,16 +402,16 @@ class Group(object):
 		self.s("msgmedia", mode)
 
 	def setNameColor(self, color):
-		self.nameColor = str(color)
+		self._nameColor = str(color)
 
 	def setFontColor(self, color):
-		self.fontColor = str(color)
+		self._fontColor = str(color)
 
 	def setFontFace(self, face):
-		self.fontFace = str(face)
+		self._fontFace = str(face)
 
 	def setFontSize(self, size):
-		self.fontSize = str(size)
+		self._fontSize = str(size)
 
 class Manager(object):
 	def __init__(self, groups, username = None, password = None):
@@ -593,7 +593,7 @@ class Manager(object):
 				group.users.remove(olddata[-1]["name"])
 				group.users.append(name)
 	def _r_ok(self, group, args):
-		self._callEvent("ok", group.name)
+		self._callEvent("ok", group)
 		group.owner = args[1]
 		group.mods = [f.split(",")[0] for f in args[7].split(";")]
 		self.ip = args[6]
