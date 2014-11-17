@@ -56,7 +56,24 @@ def getServer(g):
 _grouptimes = {}
 
 
-
+def anonParsing(first, uid):
+	uid = str(uid)
+	try:
+		first = str(first)
+		first = first.split(".")[0][-4:]
+	except:
+		first = "3452"
+	uid = uid[-4:]
+	current = 0
+	num = ""
+	while current < len(first):
+		temp1 = first[current:][:1]
+		temp2 = uid[current:][:1]
+		result = str(int(temp1) + int(temp2))
+		result = result[-1]
+		current += 1
+		num += result
+	return num
 def getauth(name, password):
 	return requests.post("http://chatango.com/login", data = {
 		"user_id": name,
@@ -198,6 +215,7 @@ class Group(object):
 		self.banlist = list()
 		self.users = []
 		self.user = username or None
+		self._userdata = []
 		
 
 	def Last(self, args, mode = "user"):
@@ -216,16 +234,31 @@ class Group(object):
 
 	def delUser(self, args):
 		if args:
+			data = self.Last(args)
+			if not data:
+				return False
 			unid = self.Last(args)._unid
 			ip = self.Last(args)._ip
+			if args[1] in ["!","#"]:
+				args = ""
 			self.s("delallmsg", unid, ip, args)
 			return True
 		return False
-
 	def unbanUser(self, args):
 		if args:
-			unid  = self.Last(args)._unid
-			ip = self.Last(args)._ip
+			ip = None
+			unid = None
+			data = self.Last(args)
+			if data:
+				unid  = data._unid
+				ip = data._ip
+			else:
+				for i in self.banlist:
+					if i[2] == args:
+						ip = i[1]
+						unid = i[0]
+				if not ip and not unid:
+					return False	
 			self.s("removeblock", unid, ip, args)
 			return True
 		return False
@@ -234,9 +267,11 @@ class Group(object):
 		if args:
 			unid  = self.Last(args)._unid
 			ip = self.Last(args)._ip
+			if args[0] in ["#","!"]: args = ""
 			self.s("block", unid, ip, args)
 			return True
 		return False
+
 
 	def connect(self):
 		try:
@@ -321,6 +356,19 @@ class Group(object):
 				self.connected = False
 
 
+	def logout(self):
+		self.s("blogout")
+		self.username = "!anon"
+	def login(self, user = None, password = None):
+		if user and password:
+			self.s("blogin", user, password)
+			self.username = user
+		elif user:
+			self.s("blogin", user)
+			self.username = "#"+user
+		else:
+			pass
+		
 	def post(self, contents):
 		_censor = {
 			self.mgr.password: ' http://i.imgur.com/bqJ5N8B.jpg ', # not even secure, gg.
@@ -413,9 +461,9 @@ class Manager(object):
 		try: return [n for n in reversed(self._mq) if n.name == args][-1]
 		except: return False
 			
-	def _callEvent(self, evt, *args):
+	def _callEvent(self, evt, *args, **keys):
 		if hasattr(self, "_p_%s" %  evt):
-			getattr(self, "_p_%s" % evt)(args)
+			getattr(self, "_p_%s" % evt)(*args,**keys)
 
 	def _add(self, group):
 		if not group in self.groups:
@@ -428,11 +476,11 @@ class Manager(object):
 			pass
 			
 			
-	def _p_onJoin(self, args):
-		print("JR","%s %s" % (args[1], args[0]))
+	def _p_onJoin(self, *args):
+		print("JR","%s %s" % (args[1], args[0].name))
 		
-	def _p_onPart(self, args):
-		print("PR","%s %s" % (args[1], args[0]))
+	def _p_onPart(self, *args):
+		print("PR","%s %s" % (args[1], args[0].name))
 		
 	def _p_ok(self, args):
 		print("CONN", "%s" % args)
@@ -483,8 +531,20 @@ class Manager(object):
 		for msg in reversed(self._i_log):
 			user = msg.name
 			self._addHistory(msg, group.name)
-
+	
+	def _r_blocked(self, group, args):
+		if args[3]:
+			group.s("blocklist", "block", "", "next", "500")
+			self._callEvent("onBan", group, args[3], args[4])
+	
+	def _r_unblocked(self, group, args):
+		#print(args)
+		if args[3]:
+			group.s("blocklist", "block", "", "next", "500")
+			self._callEvent("onUnban", group, args[3], args[4])
+	
 	def _r_blocklist(self, group, args):
+		group.banlist = []
 		if args[1]: # we have the banlist :o
 			banlist = ":".join(args[1:]).split(";")
 			for b in banlist: # lets parse it and add it to our list :o
@@ -493,23 +553,45 @@ class Manager(object):
 	
 	def _r_g_participants(self, group, args):
 		ul = ":".join(args[1:]).split(";")
+		#print(ul)
 		for u in ul:
-			u = u.split(":")[:-1]
-			if u[-2] != "None" and u[-1] == "None":
-				group.users.append(u[-2].lower())
-				
-				
-	def _r_participant(self, group, args):
-		if len(group.users) == 0:pass
-		if args[1] == "0" and not args[4] == "None": # leave
-			self._callEvent("onPart", group.name, args[4])
-			if args[4] in group.users:
-				group.users.remove(args[4])
-		if args[1] == "1" and not args[4] == "None": # join
-			self._callEvent("onJoin", group.name, args[4])
-			if args[4] not in group.users:
-				group.users.append(args[4])
+			u = u.split(":")
+			name = self.checkname(u[1], u[2], u[3], u[4])
+			#if u[-3] != "None" and u[-2] == "None":
+			group.users.append(name)
+			group._userdata.append({"id":u[0],"time":u[1], "uid":u[2], "name":name})
 	
+	def checkname(self, jtime, uid, name = "None", tname = "None"):
+		if name == "None" and tname == "None":
+				return "!anon"+anonParsing(jtime, uid)
+		elif name == "None":
+			return "#"+tname.lower()
+		else:
+			return name.lower()
+	
+	def _r_participant(self, group, args):
+		#id = args[2]
+		#uid = arg[3]
+		if len(group.users) == 0:pass
+		olddata = [i for i in group._userdata if i["id"] == args[2]]
+		name = self.checkname(args[7], args[3], args[4], args[5])
+		if args[1] == "0":# leave
+			self._callEvent("onPart", group, olddata[-1]["name"])
+			if olddata[-1]["name"] in group.users:
+				group.users.remove(olddata[-1]["name"])
+				group._userdata.remove(olddata[-1])
+		if args[1] == "1": # join
+			self._callEvent("onJoin", group, name)
+			if name not in group.users:
+				group.users.append(name)
+			group._userdata.append({"name":name, "id":args[2], "uid":args[3], "time":args[7]})
+		if args[1] == "2":
+			self._callEvent("onSwitch",group,olddata[-1]["name"],name)
+			group._userdata.append({"name":name, "id":args[2], "uid":args[3], "time":args[7]})
+			if olddata[-1]["name"] in group.users:
+				group._userdata.remove(olddata[-1])
+				group.users.remove(olddata[-1]["name"])
+				group.users.append(name)
 	def _r_ok(self, group, args):
 		self._callEvent("ok", group.name)
 		group.owner = args[1]
@@ -536,11 +618,17 @@ class Manager(object):
 	def _r_i(self, group, args):
 		args = args[1:]
 		mtime = float(args[0])
-		name = args[1]
+		#name = args[1]
 		puid = args[3]
 		pid = args[5]
 		msgid = args[5]
 		rawmsg = ":".join(args[9:])
+		if args[1]:
+			name = args[1]
+		elif args[2]:
+			name = "#"+args[2]
+		else:
+			name = "!anon"+anonParsing(re.search("<n(.*?)/>", rawmsg).group(1),puid)
 		ip = args[6]
 		post, nColor, fSize, fColor, fFace = self.cleanPost(rawmsg)
 		msg = self.createMessage(
@@ -574,11 +662,17 @@ class Manager(object):
 		mtime = float(args[0])
 		puid = args[3]
 		ip = args[6]
-		name = args[1]
+		#name = args[1]
 		i = args[5]
 		unid = args[4]#this
 		wtfchatango = args[6]
 		rawmsg = ":".join(args[9:])
+		if args[1]:
+			name = args[1]
+		elif args[2]:
+			name = "#"+args[2]
+		else:
+			name = "!anon"+anonParsing(re.search("<n(.*?)/>", rawmsg).group(1),puid)
 		post, nColor, fSize, fColor, fFace = self.cleanPost(rawmsg)
 		msg = self.createMessage(
 			msgid = i,
@@ -593,7 +687,7 @@ class Manager(object):
 		self._mq[i] = msg
 
 		try:
-			self._on_Message(group, name, post)
+			self._on_Message(group, name, msg)
 		except Exception as e:
 			print("Handler error:", str(e))
 
@@ -642,10 +736,11 @@ class Manager(object):
 			gl.append(go.name)
 		if ga in gl:
 			group = [f for f in self.groups if f.name.lower() == ga][0]
+			self.groups.remove(group)
 			group.connected = False
+			group._doReconnect = False
 			group.sock.close()
 			del self.threads[group]
-			self.groups.remove(group)
 			return True
 		return False
 		
