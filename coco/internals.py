@@ -222,6 +222,22 @@ class Group(object):
 			return True
 		return False
 
+	def unbanUser(self, args):
+		if args:
+			unid  = self.Last(args)._unid
+			ip = self.Last(args)._ip
+			self.s("removeblock", unid, ip, args)
+			return True
+		return False
+
+	def banUser(self, args):
+		if args:
+			unid  = self.Last(args)._unid
+			ip = self.Last(args)._ip
+			self.s("block", unid, ip, args)
+			return True
+		return False
+
 	def connect(self):
 		try:
 			self.sock = socket.socket() # Make a new socket instance.
