@@ -2,9 +2,9 @@
 # File: internals.py
 # Title: Coco - Chatango library.
 # Author(s): Sorch & Piks & Dynamic
-# Version: 0.3(sorta stable) - c: because you're gonna need it so freaking PRAY!
+# Version: 0.4(stable-ish getting there slowly) - c: because you're gonna need it so freaking PRAY!
 # Description:
-#	  -Multi event based chatango library for handling channel messages parts/joins and other stuff
+# -Multi event based chatango library for handling channel messages parts/joins and other stuff
 ##################################################################
 # -*- coding: utf-8 -*-
 
@@ -24,7 +24,7 @@ import random
 import re
 import json
 import requests
-
+import sys
 class CocoError(Exception):
 	pass
 
@@ -213,11 +213,10 @@ class Group(object):
 		self._fontFace = "0"
 		self.reconnectAttempts = 5
 		self.banlist = list()
+		self.bannedwords = list()
 		self.users = []
 		self.user = username or None
 		self._userdata = []
-		
-
 	def Last(self, args, mode = "user"):
 		if mode == "user":
 			try: return [n for n in self.history if n.name == args][-1]
@@ -432,7 +431,9 @@ class Manager(object):
 		self._history = list()
 		self._i_log = list()
 		self._mq = dict()
-		
+	@property
+	def groupnames(self):
+		return [n.name for n in self.groups]
 	def getroom(self , room):
 		try:return [n for n in self.groups if n.name == room][-1]
 		except:return False
@@ -442,8 +443,6 @@ class Manager(object):
 
 	def _rH(self):
 		return self._history
-
-	
 		
 		
 	def getMessage(self, mid):
@@ -601,10 +600,10 @@ class Manager(object):
 	def _r_denied(self, group, args):
 		print("denied@ %s" % group.name)
 		group.sock.close()
-	
+		self._callEvent("Failed",group)
 	def _r_n(self, group, args):
 		group.usercount =  (int(args[1], 16) or 0)
-
+		self._callEvent("onUserCount", group, group.usercount)
 	def _r_u(self, group, args):
 		args = args[1:]
 		temp = Struct(**self._mq)
@@ -613,7 +612,6 @@ class Manager(object):
 			msg.pid = args[1]
 			self_mq = msg
 			self._addHistory(msg, group.name)
-
 		
 	def _r_i(self, group, args):
 		args = args[1:]
@@ -644,7 +642,8 @@ class Manager(object):
 	
 	def _r_bw(self, group, args):
 		group.bannedwords = args[2].split("%2C")
-		
+		self._callEvent("onBannedWords", group, group.bannedwords)
+
 	def _r_delete(self, group, args):
 		try:
 			try:
@@ -652,6 +651,7 @@ class Manager(object):
 			except:
 				msg = group.Last(args[1], mode = "pid")
 			ret = "%s %s %s" % (msg.group, msg.name, msg.post)
+			self._callEvent("onMessageDelete", group, msg.name, msg)
 			print(ret)
 		except:
 			print("Msg with unknown id deleted")
@@ -696,7 +696,16 @@ class Manager(object):
 		pass
 
 	def _r_mods(self, group, args):
-		group.mods = args[1:]
+		last = group.mods
+		group.mods = [n.split(",")[0] for n in args[1:]]
+		print(args[1:])
+		if len(last) > len(group.mods): #If removed mod 
+			user = [n for n in last if not n in group.mods][0]
+			self._callEvent("onModRemove", group, user)
+		elif len(last) < len(group.mods): #If added mod
+			user = [n for n in group.mods if n not in last][0]
+			self._callEvent("onModAdded", group, user)
+
 	#
 	##########
 	
@@ -778,13 +787,19 @@ class Manager(object):
 			
 	
 	def run(self):
-		PM(self.username, self.password)
+		#PM(self.username, self.password)
 		for group in self.groups: # This basically starts the bot itself.
 			self.makeThread(group)
 		
 		while self.connected: # While the bot runs in the background, flip flop and do funny shit.
 			time.sleep(1)
-	
+	def stop(self):
+		for i in self.groups:
+			i.sock.close()
+			i._doReconnect = False
+			i.connected = False
+		self._callEvent("onStop")
+		sys.exit()
 	def _run(self, group):
 		group.connect()
 		self.setPremium(group)
